@@ -1,5 +1,3 @@
-from http import HTTPStatus
-
 from django.test import Client, TestCase
 from django.urls import reverse
 
@@ -16,7 +14,8 @@ class AboutViewsTests(TestCase):
 
     def test_about_pages_are_names(self):
         """Проверка ожидаемых ссылок."""
-        for link in self.templates_url_names:
-            with self.subTest():
-                response = self.guest_client.get(link)
-                self.assertEqual(response.status_code, HTTPStatus.OK)
+        for name, url in (
+            ('about:author', '/about/author/'),
+            ('about:tech', '/about/tech/'),
+        ):
+            self.assertEqual(reverse(name), url)

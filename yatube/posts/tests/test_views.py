@@ -1,14 +1,21 @@
+import shutil
+import tempfile
+
 from django import forms
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
-from django.test import Client, TestCase
+from django.core.files.uploadedfile import SimpleUploadedFile
+from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 
-from posts.models import Group, Post
+from posts.models import Follow, Group, Post
 
 User = get_user_model()
+TEMP_MEDIA_ROOT = tempfile.mkdtemp(dir=settings.BASE_DIR)
 
 
+@override_settings(MEDIA_ROOT=TEMP_MEDIA_ROOT)
 class PostsViewsTests(TestCase):
     @classmethod
     def setUpClass(cls):
@@ -19,11 +26,24 @@ class PostsViewsTests(TestCase):
             slug='test-slug',
             description='Тестовое описание',
         )
-
+        small_gif = (
+            b'\x47\x49\x46\x38\x39\x61\x02\x00'
+            b'\x01\x00\x80\x00\x00\x00\x00\x00'
+            b'\xFF\xFF\xFF\x21\xF9\x04\x00\x00'
+            b'\x00\x00\x00\x2C\x00\x00\x00\x00'
+            b'\x02\x00\x01\x00\x00\x02\x02\x0C'
+            b'\x0A\x00\x3B'
+        )
+        uploaded = SimpleUploadedFile(
+            name='small.gif',
+            content=small_gif,
+            content_type='image/gif'
+        )
         cls.post = Post.objects.create(
             text='Привет!',
             author=cls.user,
             group=cls.group,
+            image=uploaded,
         )
         cls.templates_pages_names = {
             'posts/index.html': reverse('posts:index'),
@@ -33,6 +53,11 @@ class PostsViewsTests(TestCase):
                 kwargs={'slug': 'test-slug'},
             ),
         }
+
+    @classmethod
+    def tearDownClass(cls):
+        super().tearDownClass()
+        shutil.rmtree(TEMP_MEDIA_ROOT, ignore_errors=True)
 
     def setUp(self):
         self.authorized_client = Client()
@@ -44,6 +69,7 @@ class PostsViewsTests(TestCase):
             self.assertEqual(post.text, self.post.text)
             self.assertEqual(post.author, self.post.author)
             self.assertEqual(post.group.id, self.post.group.id)
+            self.assertEqual(post.image, self.post.image)
 
     def test_posts_pages_use_correct_template(self):
         """Проверка, использует ли адрес URL соответствующий шаблон."""
@@ -222,3 +248,70 @@ class PostsPaginatorViewsTests(TestCase):
                             link,
                             {'page': index}
                         )
+
+
+class FollowViewsTest(TestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.author = User.objects.create(
+            username='Автор поста',
+        )
+        cls.follower = User.objects.create(
+            username='Подписчик',
+        )
+        cls.post = Post.objects.create(
+            text='Пост для подписки',
+            author=cls.author,
+        )
+
+    def setUp(self):
+        self.author_client = Client()
+        self.author_client.force_login(self.follower)
+        self.follower_client = Client()
+        self.follower_client.force_login(self.author)
+
+    def test_follow_on_user(self):
+        """Проверка подписки на автора."""
+        count_follow = Follow.objects.count()
+        self.follower_client.post(
+            reverse(
+                'posts:profile_follow',
+                kwargs={'username': self.follower}))
+        follow = Follow.objects.all().first()
+        self.assertEqual(Follow.objects.count(), count_follow + 1)
+        self.assertEqual(follow.author_id, self.follower.id)
+        self.assertEqual(follow.user_id, self.author.id)
+
+    def test_unfollow_on_user(self):
+        """Проверка отписки от автора."""
+        Follow.objects.create(
+            user=self.author,
+            author=self.follower)
+        count_follow = Follow.objects.count()
+        self.follower_client.post(
+            reverse(
+                'posts:profile_unfollow',
+                kwargs={'username': self.follower}))
+        self.assertEqual(Follow.objects.count(), count_follow - 1)
+
+    def test_follow_on_authors(self):
+        """Проверка записей в ленте у тех кто подписан."""
+        post = Post.objects.create(
+            author=self.author,
+            text='Подпишись')
+        Follow.objects.create(
+            user=self.follower,
+            author=self.author)
+        response = self.author_client.get(
+            reverse('posts:follow_index'))
+        self.assertIn(post, response.context['page_obj'].object_list)
+
+    def test_not_follow_on_authors(self):
+        """Проверка записей в ленте у тех кто не подписан."""
+        post = Post.objects.create(
+            author=self.author,
+            text='Подпишись')
+        response = self.author_client.get(
+            reverse('posts:follow_index'))
+        self.assertNotIn(post, response.context['page_obj'].object_list)

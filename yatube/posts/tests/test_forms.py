@@ -67,7 +67,6 @@ class PostsFormsTest(TestCase):
             'group': self.group.id,
             'image': uploaded,
         }
-        self.assertFalse(Post.objects.filter(**form_data).first())
         self.authorized_client.post(
             reverse('posts:post_create'),
             data=form_data,
