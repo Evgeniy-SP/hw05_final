@@ -184,19 +184,34 @@ class PostsViewsTests(TestCase):
         self.assertEqual(post.group, self.group)
 
     def test_cache_index(self):
+        """Изменение информации в БД не меняет выдачу."""
+        post = Post.objects.create(
+            text='Тестовый пост для кеша',
+            author=self.user,
+        )
+        content_before = self.authorized_client.get(
+            reverse('posts:index'),
+        ).content
+        post.delete()
+        content_after = self.authorized_client.get(
+            reverse('posts:index'),
+        ).content
+        self.assertEqual(content_before, content_after)
+
+    def test_cache_index_view_changes(self):
         """Проверка работы кеша"""
         post = Post.objects.create(
             text='Тестовый пост для кеша',
-            author=self.user)
+            author=self.user,
+        )
         content_before = self.authorized_client.get(
-            reverse('posts:index')).content
+            reverse('posts:index'),
+        ).content
         post.delete()
-        content_after = self.authorized_client.get(
-            reverse('posts:index')).content
-        self.assertEqual(content_before, content_after)
         cache.clear()
         content_cache_clear = self.authorized_client.get(
-            reverse('posts:index')).content
+            reverse('posts:index'),
+        ).content
         self.assertNotEqual(content_before, content_cache_clear)
 
 
@@ -277,7 +292,9 @@ class FollowViewsTest(TestCase):
         self.follower_client.post(
             reverse(
                 'posts:profile_follow',
-                kwargs={'username': self.follower}))
+                kwargs={'username': self.follower},
+            )
+        )
         follow = Follow.objects.all().first()
         self.assertEqual(Follow.objects.count(), count_follow + 1)
         self.assertEqual(follow.author_id, self.follower.id)
@@ -285,15 +302,18 @@ class FollowViewsTest(TestCase):
 
     def test_unfollow_on_user(self):
         """Проверка отписки от автора."""
-        Follow.objects.create(
+        follow = Follow.objects.create(
             user=self.author,
             author=self.follower)
         count_follow = Follow.objects.count()
         self.follower_client.post(
             reverse(
                 'posts:profile_unfollow',
-                kwargs={'username': self.follower}))
+                kwargs={'username': self.follower},
+            )
+        )
         self.assertEqual(Follow.objects.count(), count_follow - 1)
+        self.assertNotIn(follow, Follow.objects.all())
 
     def test_follow_on_authors(self):
         """Проверка записей в ленте у тех кто подписан."""
@@ -304,7 +324,8 @@ class FollowViewsTest(TestCase):
             user=self.follower,
             author=self.author)
         response = self.author_client.get(
-            reverse('posts:follow_index'))
+            reverse('posts:follow_index'),
+        )
         self.assertIn(post, response.context['page_obj'].object_list)
 
     def test_not_follow_on_authors(self):

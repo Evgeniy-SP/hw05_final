@@ -41,9 +41,9 @@ def profile(request, username):
     post_list = Post.objects.filter(author=author)
     page_number = request.GET.get('page')
 
-    following = request.user.is_authenticated
-    if following:
-        following = author.following.filter(user=request.user).exists()
+    following = request.user.is_authenticated and (
+        author.following.filter(user=request.user).exists()
+    )
 
     context = {
         'author': author,
@@ -66,8 +66,10 @@ def post_detail(request, post_id):
 
 @login_required
 def post_create(request):
-    form = PostForm(request.POST or None,
-                    files=request.FILES or None,)
+    form = PostForm(
+        request.POST or None,
+        files=request.FILES or None,
+    )
     if form.is_valid():
         post = form.save(commit=False)
         post.author = request.user
@@ -84,8 +86,8 @@ def post_edit(request, post_id):
 
     form = PostForm(
         request.POST or None,
-        instance=post,
         files=request.FILES or None,
+        instance=post,
     )
     if form.is_valid():
         form.save()
@@ -134,10 +136,10 @@ def profile_follow(request, username):
 
 @login_required
 def profile_unfollow(request, username):
-    user_follower = get_object_or_404(
+    follower = get_object_or_404(
         Follow,
         user=request.user,
         author__username=username
     )
-    user_follower.delete()
+    follower.delete()
     return redirect('posts:profile', username)

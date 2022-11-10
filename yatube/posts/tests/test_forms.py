@@ -21,7 +21,8 @@ class PostsFormsTest(TestCase):
         super().setUpClass()
         cls.author = User.objects.create_user(username='Новый пользователь')
         cls.comment_author = User.objects.create_user(
-            username='Автор комментария')
+            username='Автор комментария',
+        )
         cls.group = Group.objects.create(
             title='Тестовое название группы',
             slug='test_slug',
@@ -82,44 +83,42 @@ class PostsFormsTest(TestCase):
     def test_authorized_client_create_comment(self):
         """Проверка создания комментария авторизированным пользователем."""
         comments_count = Comment.objects.count()
-        post = Post.objects.create(
-            text='Текст поста для комментирования',
-            author=self.author)
         form_data = {'text': 'Тестовый комментарий'}
         response = self.auth_user_comment.post(
             reverse(
                 'posts:add_comment',
-                kwargs={'post_id': post.id}),
+                kwargs={'post_id': self.post.id}
+            ),
             data=form_data,
-            follow=True)
-        comment = Comment.objects.first()
+            follow=True,
+        )
         self.assertEqual(Comment.objects.count(), comments_count + 1)
-        self.assertEqual(comment.text, form_data['text'])
-        self.assertEqual(comment.author, self.comment_author)
-        self.assertEqual(comment.post_id, post.id)
         self.assertRedirects(
-            response, reverse('posts:post_detail', args={post.id}))
+            response,
+            reverse('posts:post_detail', kwargs={'post_id': self.post.id}),
+        )
 
     def test_not_authorized_client_create_comment(self):
         """Проверка создания комментария не авторизированным пользователем."""
         comments_count = Comment.objects.count()
         post = Post.objects.create(
             text='Текст поста для комментирования',
-            author=self.author)
+            author=self.author,
+        )
         form_data = {'text': 'Тестовый комментарий'}
         response = self.guest_client.post(
             reverse(
                 'posts:add_comment',
-                kwargs={'post_id': post.id}),
+                kwargs={'post_id': post.id}
+            ),
             data=form_data,
-            follow=True)
+            follow=True,
+        )
         self.assertEqual(response.status_code, HTTPStatus.OK)
         self.assertEqual(Comment.objects.count(), comments_count)
 
     def test_posts_forms_edit_post(self):
         """Проверка, редактируется ли пост."""
-        old_post = Post.objects.get(id=self.post.id)
-        self.assertTrue(old_post)
         form_data = {
             'text': 'Новый текст поста',
             'group': self.group.id,
