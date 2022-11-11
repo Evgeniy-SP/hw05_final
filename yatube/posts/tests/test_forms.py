@@ -92,7 +92,11 @@ class PostsFormsTest(TestCase):
             data=form_data,
             follow=True,
         )
+        comment = Comment.objects.first()
         self.assertEqual(Comment.objects.count(), comments_count + 1)
+        self.assertEqual(comment.text, form_data['text'])
+        self.assertEqual(comment.author, self.comment_author)
+        self.assertEqual(comment.post_id, self.post.id)
         self.assertRedirects(
             response,
             reverse('posts:post_detail', kwargs={'post_id': self.post.id}),

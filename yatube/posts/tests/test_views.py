@@ -313,7 +313,7 @@ class FollowViewsTest(TestCase):
             )
         )
         self.assertEqual(Follow.objects.count(), count_follow - 1)
-        self.assertNotIn(follow, Follow.objects.all())
+        self.assertFalse(Follow.objects.filter(id=follow.id).exists())
 
     def test_follow_on_authors(self):
         """Проверка записей в ленте у тех кто подписан."""
@@ -334,5 +334,6 @@ class FollowViewsTest(TestCase):
             author=self.author,
             text='Подпишись')
         response = self.author_client.get(
-            reverse('posts:follow_index'))
+            reverse('posts:follow_index')
+        )
         self.assertNotIn(post, response.context['page_obj'].object_list)
